@@ -4,16 +4,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
 
 #define WIDTH 800
 #define HEIGHT 600
 #define CELL_SIZE 10
 #define BUTTON_HEIGHT 50
 #define NUM_BUTTONS 9
+#define width (WIDTH / CELL_SIZE)
+#define height ((HEIGHT - BUTTON_HEIGHT) / CELL_SIZE)
 
+//bool grid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE]; //grid[80][55]
+//bool nextGrid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE];
 
-bool grid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE]; //grid[80][55]
-bool nextGrid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE];
+bool** grid = NULL;
+bool** nextGrid = NULL;
 bool simulating = false;
 bool drawing = false;
 int speed = 10;
@@ -23,12 +29,71 @@ int cycle_count = 0;
 
 // Button definitions
 typedef struct {
-    float x, y, width, height;
+    float x, y, widthb, heightb;
     char label[10];
     int id;
 } Button;
 
 Button buttons[NUM_BUTTONS];
+
+void allocateGrids();
+void freeGrids();
+void initButtons();
+void drawButtons();
+void initGrid();
+void drawGrid();
+void cycleCounter();
+void updateGrid();
+int check_valid_index_x(int x);
+int check_valid_index_y(int y);
+void applyBrush(int cellX, int cellY);
+bool checkButtonPress(int x, int y);
+void mouse(int button, int state, int x, int y);
+void mouseMotion(int x, int y);
+void keyboard(unsigned char key, int x, int y);
+void timer(int value);
+void reshape(int w, int h);
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv); //инициализация библиотеки glut
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB); // установка режимов дисплея
+    glutInitWindowSize(WIDTH, HEIGHT); // размер окна
+    glutCreateWindow("Game of Life with GUI"); // создание окна с именем
+
+    glClearColor(1.0, 1.0, 1.0, 1.0); //установка цвета заднего плана
+    allocateGrids();
+    initGrid();
+    initButtons();
+
+    glutDisplayFunc(drawGrid);
+    glutMouseFunc(mouse); // позиция мыши на экране без рисования
+    glutMotionFunc(mouseMotion); // позиция мыши на экране с рисования
+    glutKeyboardFunc(keyboard); // нажатия кнопок на клавиатуре
+    glutReshapeFunc(reshape); // сохранение окна
+    glutTimerFunc(speed, timer, 0); // для постоянной анимации
+
+    glutMainLoop(); // Запускаем цикл обработки сообщений GLUT
+    freeGrids();
+    return 0;
+}
+
+void allocateGrids() {
+    grid = (bool**)malloc(width * sizeof(bool*));
+    nextGrid = (bool**)malloc(width * sizeof(bool*));
+    for (int i = 0; i < width; ++i) {
+        grid[i] = (bool*)malloc(height * sizeof(bool));
+        nextGrid[i] = (bool*)malloc(height * sizeof(bool));
+    }
+}
+
+void freeGrids() {
+    for (int i = 0; i < width; ++i) {
+        free(grid[i]);
+        free(nextGrid[i]);
+    }
+    free(grid);
+    free(nextGrid);
+}
 
 void initButtons() { //инициализация кнопок
     const char* brushNames[NUM_BUTTONS] = {
@@ -39,8 +104,8 @@ void initButtons() { //инициализация кнопок
     for (int i = 0; i < NUM_BUTTONS; i++) {
         buttons[i].x = i * (WIDTH / NUM_BUTTONS); // х начала
         buttons[i].y = HEIGHT - BUTTON_HEIGHT; // у начала
-        buttons[i].width = WIDTH / NUM_BUTTONS; // ширина
-        buttons[i].height = BUTTON_HEIGHT; // высота
+        buttons[i].widthb = WIDTH / NUM_BUTTONS; // ширина
+        buttons[i].heightb = BUTTON_HEIGHT; // высота
         sprintf(buttons[i].label, "%s", brushNames[i]); // название кнопок
         buttons[i].id = i + 1;
     }
@@ -51,9 +116,9 @@ void drawButtons() {
         glColor3f(0.0, 0.5, 0.5); //выбор цвета заднего плана кнопок
         glBegin(GL_QUADS); // постановка кисти, рисование кнопки
         glVertex2f(buttons[i].x, buttons[i].y);
-        glVertex2f(buttons[i].x + buttons[i].width, buttons[i].y);
-        glVertex2f(buttons[i].x + buttons[i].width, buttons[i].y + buttons[i].height);
-        glVertex2f(buttons[i].x, buttons[i].y + buttons[i].height);
+        glVertex2f(buttons[i].x + buttons[i].widthb, buttons[i].y);
+        glVertex2f(buttons[i].x + buttons[i].widthb, buttons[i].y + buttons[i].heightb);
+        glVertex2f(buttons[i].x, buttons[i].y + buttons[i].heightb);
         glEnd();
 
         glColor3f(0.0, 0.0, 0.0); // цвет текста
@@ -65,8 +130,8 @@ void drawButtons() {
 }
 
 void initGrid() { // заполняем нулями все окно
-    for (int i = 0; i < WIDTH / CELL_SIZE; ++i) {
-        for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
             grid[i][j] = false;
             nextGrid[i][j] = false;
         }
@@ -91,8 +156,8 @@ void drawGrid() {
     glColor3f(0.0, 0.0, 0.0);
     glPointSize(CELL_SIZE);
     glBegin(GL_POINTS);
-    for (int i = 0; i < WIDTH / CELL_SIZE; ++i) { // рисовка поставленных клеток
-        for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
+    for (int i = 0; i < width; ++i) { // рисовка поставленных клеток
+        for (int j = 0; j < height; ++j) {
             if (grid[i][j]) {
                 glVertex2i(i * CELL_SIZE + CELL_SIZE / 2, j * CELL_SIZE + CELL_SIZE / 2);
             }
@@ -107,7 +172,7 @@ void drawGrid() {
     for (char* c = gen_count_str; *c != '\0'; c++) {
         glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *c);
     }
-    
+
     glRasterPos2f(200, HEIGHT - BUTTON_HEIGHT - 20);
     char cycle_label_str[50];
     sprintf(cycle_label_str, "Cycles: %d", cycle_count);
@@ -121,8 +186,8 @@ void drawGrid() {
 
 void cycleCounter() {
     cycle_count = 0;
-    for (int i = 0; i < WIDTH / CELL_SIZE; ++i) {
-        for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
             if (grid[i][j]) {
                 //printf("%d %d\n", i, j);
                 if (grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] \
@@ -130,61 +195,61 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 0)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j)] && grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 3)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 0)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 0)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 4)][check_valid_index_y(j + 3)]) cycle_count += 1;
-               
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
+
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 4)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 4)]) cycle_count += 1;
-                
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)]) cycle_count += 1;
-                
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
+
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)]) cycle_count += 1;
-                
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 4)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)]\
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)]\
@@ -192,7 +257,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 4)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
@@ -235,7 +300,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 2)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 2)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 1)] \
@@ -247,7 +312,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 2)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
@@ -261,7 +326,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] \
@@ -281,7 +346,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)]) cycle_count += 1;
-                
+
                 else if (!grid[check_valid_index_x(i - 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
@@ -303,7 +368,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 3)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 2)])  cycle_count += 1;
@@ -313,7 +378,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 2)])  cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
@@ -327,17 +392,17 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 4)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 4)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 3)] \
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 3)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
@@ -361,7 +426,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
@@ -385,7 +450,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 2)] \
+                else if (!grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 2)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 1)] \
@@ -399,7 +464,7 @@ void cycleCounter() {
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 2)] \
                     && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 3)] && !grid[check_valid_index_x(i + 4)][check_valid_index_y(j - 3)]) cycle_count += 1;
 
-                else if(!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
+                else if (!grid[check_valid_index_x(i - 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j + 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j + 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j)] && grid[check_valid_index_x(i + 2)][check_valid_index_y(j)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i)][check_valid_index_y(j - 1)] && grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 1)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 1)] \
                     && !grid[check_valid_index_x(i - 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 2)][check_valid_index_y(j - 2)] && !grid[check_valid_index_x(i + 3)][check_valid_index_y(j - 2)]) cycle_count += 1;
@@ -416,22 +481,17 @@ void cycleCounter() {
 // !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)]
 
 void updateGrid() { // основной алгоритм программы
-    int u, p;
-    for (int i = 0; i < WIDTH / CELL_SIZE; ++i) {
-        for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
             int neighbors = 0; // считаем соседей
-            for (int dx = -1; dx <= 1; ++dx) {
-                for (int dy = -1; dy <= 1; ++dy) {
-                    if (dx == 0 && dy == 0) continue;
-                    int x = i + dx;
-                    int y = j + dy;
-                    if (x >= 0) u = x % (WIDTH / CELL_SIZE);
-                    else u = 79;
-                    if (y >= 0) p = y % ((HEIGHT - BUTTON_HEIGHT) / CELL_SIZE);
-                    else p = 54;
-                    if (grid[u][p]) neighbors++;
-                }
-            }
+            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)]) neighbors++;
+            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j)]) neighbors++;
+            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)]) neighbors++;
+            if (grid[check_valid_index_x(i)][check_valid_index_y(j - 1)]) neighbors++;
+            if (grid[check_valid_index_x(i)][check_valid_index_y(j + 1)]) neighbors++;
+            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)]) neighbors++;
+            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j)]) neighbors++;
+            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)]) neighbors++;
             if (grid[i][j]) {
                 nextGrid[i][j] = (neighbors == 2 || neighbors == 3);
             }
@@ -440,11 +500,10 @@ void updateGrid() { // основной алгоритм программы
             }
         }
     }
-    for (int i = 0; i < WIDTH / CELL_SIZE; ++i) {
-        for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
-            grid[i][j] = nextGrid[i][j];
-        }
-    }
+    bool** temp = grid;
+    grid = nextGrid;
+    nextGrid = temp;
+
     generation_count++;
     cycleCounter();
 }
@@ -460,13 +519,13 @@ int check_valid_index_y(int y) {
 }
 
 void applyBrush(int cellX, int cellY) {
-    if (cellX >= 0 && cellX < WIDTH / CELL_SIZE && cellY >= 0 && cellY < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+    if (cellX >= 0 && cellX < width && cellY >= 0 && cellY < height) {
         switch (brush) {
         case 1:
             grid[cellX][cellY] = true;
             break;
         case 2:
-            if (cellX + 4 < WIDTH / CELL_SIZE && cellY + 3 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 4 < width && cellY + 3 < height) {
                 grid[cellX][cellY + 1] = true; grid[cellX][cellY + 2] = true;
                 grid[cellX + 1][cellY + 1] = true; grid[cellX + 1][cellY + 2] = true; grid[cellX + 1][cellY + 3] = true;
                 grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 3] = true;
@@ -475,7 +534,7 @@ void applyBrush(int cellX, int cellY) {
             }
             break;
         case 3:
-            if (cellX + 5 < WIDTH / CELL_SIZE && cellY + 4 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 5 < width && cellY + 4 < height) {
                 grid[cellX][cellY + 1] = true; grid[cellX][cellY + 3] = true;
                 grid[cellX + 1][cellY + 4] = true;
                 grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 4] = true;
@@ -485,7 +544,7 @@ void applyBrush(int cellX, int cellY) {
             }
             break;
         case 4:
-            if (cellX + 12 < WIDTH / CELL_SIZE && cellY + 10 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 12 < width && cellY + 10 < height) {
                 grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
                 grid[cellX + 1][cellY + 4] = true; grid[cellX + 1][cellY + 5] = true; grid[cellX + 1][cellY + 6] = true;
                 grid[cellX + 2][cellY + 8] = true;
@@ -502,7 +561,7 @@ void applyBrush(int cellX, int cellY) {
             }
             break;
         case 5:
-            if (cellX + 18 < WIDTH / CELL_SIZE && cellY + 10 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 18 < width && cellY + 10 < height) {
                 grid[cellX][cellY] = true; grid[cellX][cellY + 1] = true; grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
                 grid[cellX + 1][cellY + 5] = true; grid[cellX + 1][cellY + 6] = true;
                 grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 3] = true; grid[cellX + 2][cellY + 5] = true;
@@ -525,7 +584,7 @@ void applyBrush(int cellX, int cellY) {
             break;
 
         case 6:
-            if (cellX + 35 < WIDTH / CELL_SIZE && cellY + 8 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 35 < width && cellY + 8 < height) {
                 grid[cellX][cellY + 3] = true; grid[cellX][cellY + 4] = true;
                 grid[cellX + 1][cellY + 3] = true; grid[cellX + 1][cellY + 4] = true;
                 grid[cellX + 5][cellY + 1] = true; grid[cellX + 5][cellY + 2] = true;
@@ -545,7 +604,7 @@ void applyBrush(int cellX, int cellY) {
             }
             break;
         case 7:
-            if (cellX + 8 < WIDTH / CELL_SIZE && cellY + 5 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 8 < width && cellY + 5 < height) {
                 grid[cellX][cellY + 1] = true;
                 grid[cellX + 1][cellY] = true; grid[cellX + 1][cellY + 1] = true;
                 grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 5] = true;
@@ -557,7 +616,7 @@ void applyBrush(int cellX, int cellY) {
             }
             break;
         case 8:
-            if (cellX + 6 < WIDTH / CELL_SIZE && cellY + 6 < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE) {
+            if (cellX + 6 < width && cellY + 6 < height) {
                 grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
                 grid[cellX + 1][cellY] = true; grid[cellX + 1][cellY + 1] = true; grid[cellX + 1][cellY + 5] = true;
                 grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 4] = true;
@@ -576,8 +635,8 @@ void applyBrush(int cellX, int cellY) {
 bool checkButtonPress(int x, int y) {
     y = HEIGHT - y;
     for (int i = 0; i < NUM_BUTTONS; i++) {
-        if (x >= buttons[i].x && x <= buttons[i].x + buttons[i].width &&
-            y >= buttons[i].y && y <= buttons[i].y + buttons[i].height) {
+        if (x >= buttons[i].x && x <= buttons[i].x + buttons[i].widthb &&
+            y >= buttons[i].y && y <= buttons[i].y + buttons[i].heightb) {
             brush = buttons[i].id;
             return true;
         }
@@ -629,8 +688,8 @@ void keyboard(unsigned char key, int x, int y) {
     case 't':
     {
         bool empty = true;
-        for (int i = 0; i < WIDTH / CELL_SIZE && empty; ++i) {
-            for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE && empty; ++j) {
+        for (int i = 0; i < width && empty; ++i) {
+            for (int j = 0; j < height && empty; ++j) {
                 if (grid[i][j]) {
                     empty = false;
                 }
@@ -638,8 +697,8 @@ void keyboard(unsigned char key, int x, int y) {
         }
         if (empty) {
             srand(time(NULL));
-            for (int i = 0; i < WIDTH / CELL_SIZE; ++i) {
-                for (int j = 0; j < (HEIGHT - BUTTON_HEIGHT) / CELL_SIZE; ++j) {
+            for (int i = 0; i < width; ++i) {
+                for (int j = 0; j < height; ++j) {
                     if (rand() % 2 == 0) {
                         grid[i][j] = true;
                     }
@@ -667,26 +726,4 @@ void reshape(int w, int h) {
     glLoadIdentity();
     glOrtho(0, w, 0, h, -1, 1);
     glMatrixMode(GL_MODELVIEW);
-}
-
-int main(int argc, char** argv) {
-    glutInit(&argc, argv); //инициализация библиотеки glut
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB); // установка режимов дисплея
-    glutInitWindowSize(WIDTH, HEIGHT); // размер окна
-    glutCreateWindow("Game of Life with GUI"); // создание окна с именем
-
-    glClearColor(1.0, 1.0, 1.0, 1.0); //установка цвета заднего плана
-    initGrid();
-    initButtons();
-
-    glutDisplayFunc(drawGrid);
-    glutMouseFunc(mouse); // позиция мыши на экране без рисования
-    glutMotionFunc(mouseMotion); // позиция мыши на экране с рисования
-    glutKeyboardFunc(keyboard); // нажатия кнопок на клавиатуре
-    glutReshapeFunc(reshape); // сохранение окна
-    glutTimerFunc(speed, timer, 0); // для постоянной анимации
-
-    glutMainLoop(); // Запускаем цикл обработки сообщений GLUT
-
-    return 0;
 }
