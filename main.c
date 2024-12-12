@@ -18,8 +18,8 @@
 //bool grid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE]; //grid[80][55]
 //bool nextGrid[WIDTH / CELL_SIZE][(HEIGHT - BUTTON_HEIGHT) / CELL_SIZE];
 
-bool** grid = NULL;
-bool** nextGrid = NULL;
+bool* grid = NULL;
+bool* nextGrid = NULL;
 bool simulating = false;
 bool drawing = false;
 int speed = 10;
@@ -42,7 +42,7 @@ void initButtons();
 void drawButtons();
 void initGrid();
 void drawGrid();
-void cycleCounter();
+//void cycleCounter();
 void updateGrid();
 int check_valid_index_x(int x);
 int check_valid_index_y(int y);
@@ -78,19 +78,12 @@ int main(int argc, char** argv) {
 }
 
 void allocateGrids() {
-    grid = (bool**)malloc(width * sizeof(bool*));
-    nextGrid = (bool**)malloc(width * sizeof(bool*));
-    for (int i = 0; i < width; ++i) {
-        grid[i] = (bool*)malloc(height * sizeof(bool));
-        nextGrid[i] = (bool*)malloc(height * sizeof(bool));
-    }
+    grid = (bool*)malloc(height * width * sizeof(bool*));
+    nextGrid = (bool*)malloc(height * width * sizeof(bool*));
+    
 }
 
 void freeGrids() {
-    for (int i = 0; i < width; ++i) {
-        free(grid[i]);
-        free(nextGrid[i]);
-    }
     free(grid);
     free(nextGrid);
 }
@@ -132,8 +125,8 @@ void drawButtons() {
 void initGrid() { // заполняем нулями все окно
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < height; ++j) {
-            grid[i][j] = false;
-            nextGrid[i][j] = false;
+            grid[i*height + j] = false;
+            nextGrid[i*height + j] = false;
         }
     }
     generation_count = 0; cycle_count = 0;
@@ -158,7 +151,7 @@ void drawGrid() {
     glBegin(GL_POINTS);
     for (int i = 0; i < width; ++i) { // рисовка поставленных клеток
         for (int j = 0; j < height; ++j) {
-            if (grid[i][j]) {
+            if (grid[i * height + j]) {
                 glVertex2i(i * CELL_SIZE + CELL_SIZE / 2, j * CELL_SIZE + CELL_SIZE / 2);
             }
         }
@@ -184,6 +177,7 @@ void drawGrid() {
     glutSwapBuffers();
 }
 
+/*
 void cycleCounter() {
     cycle_count = 0;
     for (int i = 0; i < width; ++i) {
@@ -479,33 +473,33 @@ void cycleCounter() {
     }
 }
 // !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)] && !grid[check_valid_index_x(i)][check_valid_index_y(j)]
-
+*/
 void updateGrid() { // основной алгоритм программы
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < height; ++j) {
             int neighbors = 0; // считаем соседей
-            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j - 1)]) neighbors++;
-            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j)]) neighbors++;
-            if (grid[check_valid_index_x(i - 1)][check_valid_index_y(j + 1)]) neighbors++;
-            if (grid[check_valid_index_x(i)][check_valid_index_y(j - 1)]) neighbors++;
-            if (grid[check_valid_index_x(i)][check_valid_index_y(j + 1)]) neighbors++;
-            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j - 1)]) neighbors++;
-            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j)]) neighbors++;
-            if (grid[check_valid_index_x(i + 1)][check_valid_index_y(j + 1)]) neighbors++;
-            if (grid[i][j]) {
-                nextGrid[i][j] = (neighbors == 2 || neighbors == 3);
+            if (grid[(i - 1 + width)%width*height + (j - 1 + height) % height]) neighbors++;
+            if (grid[(i - 1 + width)%width*height + (j  + height) % height]) neighbors++;
+            if (grid[(i - 1 + width)%width*height + (j + 1 + height) % height]) neighbors++;
+            if (grid[(i + width)%width*height +  (j - 1 + height) % height]) neighbors++;
+            if (grid[(i + width)%width*height +  (j + 1 + height) % height]) neighbors++;
+            if (grid[(i + 1 + width)%width*height +  (j - 1 + height) % height]) neighbors++;
+            if (grid[(i + 1 + width)%width*height +  (j  + height) % height]) neighbors++;
+            if (grid[(i + 1 + width)%width*height +  (j + 1 + height) % height]) neighbors++;
+            if (grid[i*height + j]) {
+                nextGrid[i*height + j] = (neighbors == 2 || neighbors == 3);
             }
             else {
-                nextGrid[i][j] = (neighbors == 3);
+                nextGrid[i * height + j] = (neighbors == 3);
             }
         }
     }
-    bool** temp = grid;
+    bool* temp = grid;
     grid = nextGrid;
     nextGrid = temp;
 
     generation_count++;
-    cycleCounter();
+    //cycleCounter();
 }
 
 int check_valid_index_x(int x) {
@@ -519,114 +513,114 @@ int check_valid_index_y(int y) {
 }
 
 void applyBrush(int cellX, int cellY) {
-    if (cellX >= 0 && cellX < width && cellY >= 0 && cellY < height) {
+    if (cellX >= 0 && cellX < height && cellY >= 0 && cellY < width) {
         switch (brush) {
         case 1:
-            grid[cellX][cellY] = true;
+            grid[cellX + cellY*height] = true;
             break;
         case 2:
             if (cellX + 4 < width && cellY + 3 < height) {
-                grid[cellX][cellY + 1] = true; grid[cellX][cellY + 2] = true;
-                grid[cellX + 1][cellY + 1] = true; grid[cellX + 1][cellY + 2] = true; grid[cellX + 1][cellY + 3] = true;
-                grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 3] = true;
-                grid[cellX + 3][cellY] = true; grid[cellX + 3][cellY + 1] = true; grid[cellX + 3][cellY + 2] = true;
-                grid[cellX + 4][cellY + 1] = true;
+                grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 2] = true;
+                grid[(cellX + 1) % width +cellY + 1] = true; grid[(cellX + 1) % width +cellY + 2] = true; grid[(cellX + 1) % width +cellY + 3] = true;
+                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 3] = true;
+                grid[(cellX + 3) % width +cellY] = true; grid[(cellX + 3) % width +cellY + 1] = true; grid[(cellX + 3) % width +cellY + 2] = true;
+                grid[(cellX + 4) % width +cellY + 1] = true;
             }
             break;
         case 3:
             if (cellX + 5 < width && cellY + 4 < height) {
-                grid[cellX][cellY + 1] = true; grid[cellX][cellY + 3] = true;
-                grid[cellX + 1][cellY + 4] = true;
-                grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 4] = true;
-                grid[cellX + 3][cellY + 4] = true;
-                grid[cellX + 4][cellY + 1] = true; grid[cellX + 4][cellY + 4] = true;
-                grid[cellX + 5][cellY + 2] = true; grid[cellX + 5][cellY + 3] = true; grid[cellX + 5][cellY + 4] = true;
+                grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 3] = true;
+                grid[(cellX + 1) % width +cellY + 4] = true;
+                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 4] = true;
+                grid[(cellX + 3) % width +cellY + 4] = true;
+                grid[(cellX + 4) % width +cellY + 1] = true; grid[(cellX + 4) % width +cellY + 4] = true;
+                grid[(cellX + 5) % width +cellY + 2] = true; grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 4] = true;
             }
             break;
         case 4:
             if (cellX + 12 < width && cellY + 10 < height) {
-                grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
-                grid[cellX + 1][cellY + 4] = true; grid[cellX + 1][cellY + 5] = true; grid[cellX + 1][cellY + 6] = true;
-                grid[cellX + 2][cellY + 8] = true;
-                grid[cellX + 3][cellY + 6] = true; grid[cellX + 3][cellY + 8] = true; grid[cellX + 3][cellY + 9] = true;
-                grid[cellX + 4][cellY + 9] = true; grid[cellX + 4][cellY + 10] = true;
-                grid[cellX + 5][cellY + 4] = true; grid[cellX + 5][cellY + 5] = true; grid[cellX + 5][cellY + 6] = true; grid[cellX + 5][cellY + 8] = true; grid[cellX + 5][cellY + 9] = true;
-                grid[cellX + 6][cellY + 8] = true;
-                grid[cellX + 7][cellY + 6] = true;
-                grid[cellX + 8][cellY + 2] = true;
-                grid[cellX + 9][cellY + 1] = true; grid[cellX + 9][cellY + 5] = true;
-                grid[cellX + 10][cellY + 2] = true; grid[cellX + 10][cellY + 3] = true; grid[cellX + 10][cellY + 5] = true; grid[cellX + 10][cellY + 6] = true;
-                grid[cellX + 11][cellY + 5] = true;
-                grid[cellX + 12][cellY] = true; grid[cellX + 12][cellY + 1] = true; grid[cellX + 12][cellY + 3] = true; grid[cellX + 12][cellY + 4] = true;
+                grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
+                grid[(cellX + 1) % width +cellY + 4] = true; grid[(cellX + 1) % width +cellY + 5] = true; grid[(cellX + 1) % width +cellY + 6] = true;
+                grid[(cellX + 2) % width +cellY + 8] = true;
+                grid[(cellX + 3) % width +cellY + 6] = true; grid[(cellX + 3) % width +cellY + 8] = true; grid[(cellX + 3) % width +cellY + 9] = true;
+                grid[(cellX + 4) % width +cellY + 9] = true; grid[(cellX + 4) % width +cellY + 10] = true;
+                grid[(cellX + 5) % width +cellY + 4] = true; grid[(cellX + 5) % width +cellY + 5] = true; grid[(cellX + 5) % width +cellY + 6] = true; grid[(cellX + 5) % width +cellY + 8] = true; grid[(cellX + 5) % width +cellY + 9] = true;
+                grid[(cellX + 6) % width +cellY + 8] = true;
+                grid[(cellX + 7) % width +cellY + 6] = true;
+                grid[(cellX + 8) % width +cellY + 2] = true;
+                grid[(cellX + 9) % width +cellY + 1] = true; grid[(cellX + 9) % width +cellY + 5] = true;
+                grid[(cellX + 10) % width +cellY + 2] = true; grid[(cellX + 10) % width +cellY + 3] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true;
+                grid[(cellX + 11) % width +cellY + 5] = true;
+                grid[(cellX + 12) % width +cellY] = true; grid[(cellX + 12) % width +cellY + 1] = true; grid[(cellX + 12) % width +cellY + 3] = true; grid[(cellX + 12) % width +cellY + 4] = true;
             }
             break;
         case 5:
             if (cellX + 18 < width && cellY + 10 < height) {
-                grid[cellX][cellY] = true; grid[cellX][cellY + 1] = true; grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
-                grid[cellX + 1][cellY + 5] = true; grid[cellX + 1][cellY + 6] = true;
-                grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 3] = true; grid[cellX + 2][cellY + 5] = true;
-                grid[cellX + 3][cellY + 2] = true; grid[cellX + 3][cellY + 9] = true;
-                grid[cellX + 4][cellY + 9] = true;
-                grid[cellX + 5][cellY + 3] = true; grid[cellX + 5][cellY + 10] = true;
-                grid[cellX + 6][cellY + 4] = true; grid[cellX + 6][cellY + 6] = true; grid[cellX + 6][cellY + 8] = true; grid[cellX + 6][cellY + 9] = true;
-                grid[cellX + 7][cellY] = true; grid[cellX + 7][cellY + 2] = true; grid[cellX + 7][cellY + 8] = true; grid[cellX + 7][cellY + 9] = true;
-                grid[cellX + 8][cellY] = true; grid[cellX + 8][cellY + 1] = true; grid[cellX + 8][cellY + 2] = true; grid[cellX + 8][cellY + 3] = true; grid[cellX + 8][cellY + 4] = true; grid[cellX + 8][cellY + 5] = true; grid[cellX + 8][cellY + 6] = true; grid[cellX + 8][cellY + 7] = true;
-                grid[cellX + 10][cellY] = true; grid[cellX + 10][cellY + 1] = true; grid[cellX + 10][cellY + 2] = true; grid[cellX + 10][cellY + 3] = true; grid[cellX + 10][cellY + 4] = true; grid[cellX + 10][cellY + 5] = true; grid[cellX + 10][cellY + 6] = true; grid[cellX + 10][cellY + 7] = true;
-                grid[cellX + 11][cellY] = true; grid[cellX + 11][cellY + 2] = true; grid[cellX + 11][cellY + 8] = true; grid[cellX + 11][cellY + 9] = true;
-                grid[cellX + 12][cellY + 4] = true; grid[cellX + 12][cellY + 6] = true; grid[cellX + 12][cellY + 8] = true; grid[cellX + 12][cellY + 9] = true;
-                grid[cellX + 13][cellY + 3] = true; grid[cellX + 13][cellY + 10] = true;
-                grid[cellX + 14][cellY + 9] = true;
-                grid[cellX + 15][cellY + 2] = true; grid[cellX + 15][cellY + 9] = true;
-                grid[cellX + 16][cellY + 2] = true; grid[cellX + 16][cellY + 3] = true; grid[cellX + 16][cellY + 5] = true;
-                grid[cellX + 17][cellY + 5] = true; grid[cellX + 17][cellY + 6] = true;
-                grid[cellX + 18][cellY] = true; grid[cellX + 18][cellY + 1] = true; grid[cellX + 18][cellY + 4] = true; grid[cellX + 18][cellY + 5] = true;
+                grid[cellX*width + cellY] = true; grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
+                grid[(cellX + 1) % width +cellY + 5] = true; grid[(cellX + 1) % width +cellY + 6] = true;
+                grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 3] = true; grid[(cellX + 2) % width +cellY + 5] = true;
+                grid[(cellX + 3) % width +cellY + 2] = true; grid[(cellX + 3) % width +cellY + 9] = true;
+                grid[(cellX + 4) % width +cellY + 9] = true;
+                grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 10] = true;
+                grid[(cellX + 6) % width +cellY + 4] = true; grid[(cellX + 6) % width +cellY + 6] = true; grid[(cellX + 6) % width +cellY + 8] = true; grid[(cellX + 6) % width +cellY + 9] = true;
+                grid[(cellX + 7) % width +cellY] = true; grid[(cellX + 7) % width +cellY + 2] = true; grid[(cellX + 7) % width +cellY + 8] = true; grid[(cellX + 7) % width +cellY + 9] = true;
+                grid[(cellX + 8) % width +cellY] = true; grid[(cellX + 8) % width +cellY + 1] = true; grid[(cellX + 8) % width +cellY + 2] = true; grid[(cellX + 8) % width +cellY + 3] = true; grid[(cellX + 8) % width +cellY + 4] = true; grid[(cellX + 8) % width +cellY + 5] = true; grid[(cellX + 8) % width +cellY + 6] = true; grid[(cellX + 8) % width +cellY + 7] = true;
+                grid[(cellX + 10) % width +cellY] = true; grid[(cellX + 10) % width +cellY + 1] = true; grid[(cellX + 10) % width +cellY + 2] = true; grid[(cellX + 10) % width +cellY + 3] = true; grid[(cellX + 10) % width +cellY + 4] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true; grid[(cellX + 10) % width +cellY + 7] = true;
+                grid[(cellX + 11) % width +cellY] = true; grid[(cellX + 11) % width +cellY + 2] = true; grid[(cellX + 11) % width +cellY + 8] = true; grid[(cellX + 11) % width +cellY + 9] = true;
+                grid[(cellX + 12) % width +cellY + 4] = true; grid[(cellX + 12) % width +cellY + 6] = true; grid[(cellX + 12) % width +cellY + 8] = true; grid[(cellX + 12) % width +cellY + 9] = true;
+                grid[(cellX + 13) % width +cellY + 3] = true; grid[(cellX + 13) % width +cellY + 10] = true;
+                grid[(cellX + 14) % width +cellY + 9] = true;
+                grid[(cellX + 15) % width +cellY + 2] = true; grid[(cellX + 15) % width +cellY + 9] = true;
+                grid[(cellX + 16) % width +cellY + 2] = true; grid[(cellX + 16) % width +cellY + 3] = true; grid[(cellX + 16) % width +cellY + 5] = true;
+                grid[(cellX + 17) % width +cellY + 5] = true; grid[(cellX + 17) % width +cellY + 6] = true;
+                grid[(cellX + 18) % width +cellY] = true; grid[(cellX + 18) % width +cellY + 1] = true; grid[(cellX + 18) % width +cellY + 4] = true; grid[(cellX + 18) % width +cellY + 5] = true;
             }
             break;
 
         case 6:
             if (cellX + 35 < width && cellY + 8 < height) {
-                grid[cellX][cellY + 3] = true; grid[cellX][cellY + 4] = true;
-                grid[cellX + 1][cellY + 3] = true; grid[cellX + 1][cellY + 4] = true;
-                grid[cellX + 5][cellY + 1] = true; grid[cellX + 5][cellY + 2] = true;
-                grid[cellX + 10][cellY] = true; grid[cellX + 10][cellY + 1] = true; grid[cellX + 10][cellY + 5] = true; grid[cellX + 10][cellY + 6] = true;
-                grid[cellX + 11][cellY + 1] = true; grid[cellX + 11][cellY + 2] = true; grid[cellX + 11][cellY + 3] = true; grid[cellX + 11][cellY + 4] = true; grid[cellX + 11][cellY + 5] = true;
-                grid[cellX + 12][cellY + 1] = true; grid[cellX + 12][cellY + 2] = true; grid[cellX + 12][cellY + 4] = true; grid[cellX + 12][cellY + 5] = true;
-                grid[cellX + 13][cellY + 1] = true; grid[cellX + 13][cellY + 2] = true; grid[cellX + 13][cellY + 4] = true; grid[cellX + 13][cellY + 5] = true;
-                grid[cellX + 14][cellY + 2] = true; grid[cellX + 14][cellY + 3] = true; grid[cellX + 14][cellY + 4] = true;
-                grid[cellX + 19][cellY + 4] = true; grid[cellX + 19][cellY + 5] = true; grid[cellX + 19][cellY + 6] = true;
-                grid[cellX + 20][cellY + 4] = true; grid[cellX + 20][cellY + 5] = true; grid[cellX + 20][cellY + 6] = true;
-                grid[cellX + 21][cellY + 3] = true; grid[cellX + 21][cellY + 7] = true;
-                grid[cellX + 22][cellY + 2] = true; grid[cellX + 22][cellY + 8] = true;
-                grid[cellX + 23][cellY + 3] = true; grid[cellX + 23][cellY + 7] = true;
-                grid[cellX + 24][cellY + 4] = true; grid[cellX + 24][cellY + 5] = true; grid[cellX + 24][cellY + 6] = true;
-                grid[cellX + 34][cellY + 5] = true; grid[cellX + 34][cellY + 6] = true;
-                grid[cellX + 35][cellY + 5] = true; grid[cellX + 35][cellY + 6] = true;
+                grid[cellX*width + cellY + 3] = true; grid[cellX*width + cellY + 4] = true;
+                grid[(cellX + 1) % width +cellY + 3] = true; grid[(cellX + 1) % width +cellY + 4] = true;
+                grid[(cellX + 5) % width +cellY + 1] = true; grid[(cellX + 5) % width +cellY + 2] = true;
+                grid[(cellX + 10) % width +cellY] = true; grid[(cellX + 10) % width +cellY + 1] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true;
+                grid[(cellX + 11) % width +cellY + 1] = true; grid[(cellX + 11) % width +cellY + 2] = true; grid[(cellX + 11) % width +cellY + 3] = true; grid[(cellX + 11) % width +cellY + 4] = true; grid[(cellX + 11) % width +cellY + 5] = true;
+                grid[(cellX + 12) % width +cellY + 1] = true; grid[(cellX + 12) % width +cellY + 2] = true; grid[(cellX + 12) % width +cellY + 4] = true; grid[(cellX + 12) % width +cellY + 5] = true;
+                grid[(cellX + 13) % width +cellY + 1] = true; grid[(cellX + 13) % width +cellY + 2] = true; grid[(cellX + 13) % width +cellY + 4] = true; grid[(cellX + 13) % width +cellY + 5] = true;
+                grid[(cellX + 14) % width +cellY + 2] = true; grid[(cellX + 14) % width +cellY + 3] = true; grid[(cellX + 14) % width +cellY + 4] = true;
+                grid[(cellX + 19) % width +cellY + 4] = true; grid[(cellX + 19) % width +cellY + 5] = true; grid[(cellX + 19) % width +cellY + 6] = true;
+                grid[(cellX + 20) % width +cellY + 4] = true; grid[(cellX + 20) % width +cellY + 5] = true; grid[(cellX + 20) % width +cellY + 6] = true;
+                grid[(cellX + 21) % width +cellY + 3] = true; grid[(cellX + 21) % width +cellY + 7] = true;
+                grid[(cellX + 22) % width +cellY + 2] = true; grid[(cellX + 22) % width +cellY + 8] = true;
+                grid[(cellX + 23) % width +cellY + 3] = true; grid[(cellX + 23) % width +cellY + 7] = true;
+                grid[(cellX + 24) % width +cellY + 4] = true; grid[(cellX + 24) % width +cellY + 5] = true; grid[(cellX + 24) % width +cellY + 6] = true;
+                grid[(cellX + 34) % width +cellY + 5] = true; grid[(cellX + 34) % width +cellY + 6] = true;
+                grid[(cellX + 35) % width +cellY + 5] = true; grid[(cellX + 35) % width +cellY + 6] = true;
             }
             break;
         case 7:
             if (cellX + 8 < width && cellY + 5 < height) {
-                grid[cellX][cellY + 1] = true;
-                grid[cellX + 1][cellY] = true; grid[cellX + 1][cellY + 1] = true;
-                grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 5] = true;
-                grid[cellX + 3][cellY + 1] = true; grid[cellX + 3][cellY + 2] = true; grid[cellX + 3][cellY + 3] = true; grid[cellX + 3][cellY + 5] = true;
-                grid[cellX + 5][cellY + 1] = true; grid[cellX + 5][cellY + 2] = true; grid[cellX + 5][cellY + 3] = true; grid[cellX + 5][cellY + 5] = true;
-                grid[cellX + 6][cellY] = true; grid[cellX + 6][cellY + 5] = true;
-                grid[cellX + 7][cellY] = true; grid[cellX + 7][cellY + 1] = true;
-                grid[cellX + 8][cellY + 1] = true;
+                grid[cellX*width + cellY + 1] = true;
+                grid[(cellX + 1) % width +cellY] = true; grid[(cellX + 1) % width +cellY + 1] = true;
+                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 5] = true;
+                grid[(cellX + 3) % width +cellY + 1] = true; grid[(cellX + 3) % width +cellY + 2] = true; grid[(cellX + 3) % width +cellY + 3] = true; grid[(cellX + 3) % width +cellY + 5] = true;
+                grid[(cellX + 5) % width +cellY + 1] = true; grid[(cellX + 5) % width +cellY + 2] = true; grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 5] = true;
+                grid[(cellX + 6) % width +cellY] = true; grid[(cellX + 6) % width +cellY + 5] = true;
+                grid[(cellX + 7) % width +cellY] = true; grid[(cellX + 7) % width +cellY + 1] = true;
+                grid[(cellX + 8) % width +cellY + 1] = true;
             }
             break;
         case 8:
             if (cellX + 6 < width && cellY + 6 < height) {
-                grid[cellX][cellY + 4] = true; grid[cellX][cellY + 5] = true;
-                grid[cellX + 1][cellY] = true; grid[cellX + 1][cellY + 1] = true; grid[cellX + 1][cellY + 5] = true;
-                grid[cellX + 2][cellY] = true; grid[cellX + 2][cellY + 2] = true; grid[cellX + 2][cellY + 4] = true;
-                grid[cellX + 4][cellY + 2] = true; grid[cellX + 4][cellY + 4] = true; grid[cellX + 4][cellY + 6] = true;
-                grid[cellX + 5][cellY + 4] = true; grid[cellX + 5][cellY + 6] = true;
-                grid[cellX + 6][cellY + 6] = true;
+                grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
+                grid[(cellX + 1) % width +cellY] = true; grid[(cellX + 1) % width +cellY + 1] = true; grid[(cellX + 1) % width +cellY + 5] = true;
+                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 4] = true;
+                grid[(cellX + 4) % width +cellY + 2] = true; grid[(cellX + 4) % width +cellY + 4] = true; grid[(cellX + 4) % width +cellY + 6] = true;
+                grid[(cellX + 5) % width +cellY + 4] = true; grid[(cellX + 5) % width +cellY + 6] = true;
+                grid[(cellX + 6) % width +cellY + 6] = true;
             }
             break;
         case 9:
-            grid[cellX][cellY] = false;
+            grid[cellX*width + cellY] = false;
             break;
         }
     }
@@ -650,7 +644,8 @@ void mouse(int button, int state, int x, int y) {
             drawing = true;
             int cellX = x / CELL_SIZE;
             int cellY = (HEIGHT - y) / CELL_SIZE;
-            applyBrush(cellX, cellY);
+            printf("%d %d\n", cellX, cellY);
+            applyBrush(cellY, cellX);
         }
     }
     else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
@@ -663,7 +658,7 @@ void mouseMotion(int x, int y) {
         return;
     int cellX = x / CELL_SIZE;
     int cellY = (HEIGHT - y) / CELL_SIZE;
-    applyBrush(cellX, cellY);
+    applyBrush(cellY, cellX);
     glutPostRedisplay();
 }
 
@@ -690,7 +685,7 @@ void keyboard(unsigned char key, int x, int y) {
         bool empty = true;
         for (int i = 0; i < width && empty; ++i) {
             for (int j = 0; j < height && empty; ++j) {
-                if (grid[i][j]) {
+                if (grid[i*height + j]) {
                     empty = false;
                 }
             }
@@ -700,7 +695,7 @@ void keyboard(unsigned char key, int x, int y) {
             for (int i = 0; i < width; ++i) {
                 for (int j = 0; j < height; ++j) {
                     if (rand() % 2 == 0) {
-                        grid[i][j] = true;
+                        grid[i*height + j] = true;
                     }
                 }
             }
