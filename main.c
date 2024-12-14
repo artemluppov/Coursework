@@ -512,115 +512,94 @@ int check_valid_index_y(int y) {
     else return y % 55;
 }
 
-void applyBrush(int cellX, int cellY) {
-    if (cellX >= 0 && cellX < height && cellY >= 0 && cellY < width) {
+void applyBrush(int cellY, int cellX) {
+    if (cellY >= 0 && cellY < height && cellX >= 0 && cellX < width) {
         switch (brush) {
         case 1:
-            grid[cellX + cellY*height] = true;
+            grid[cellY + cellX*height] = true;
             break;
+        
         case 2:
             if (cellX + 4 < width && cellY + 3 < height) {
-                grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 2] = true;
-                grid[(cellX + 1) % width +cellY + 1] = true; grid[(cellX + 1) % width +cellY + 2] = true; grid[(cellX + 1) % width +cellY + 3] = true;
-                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 3] = true;
-                grid[(cellX + 3) % width +cellY] = true; grid[(cellX + 3) % width +cellY + 1] = true; grid[(cellX + 3) % width +cellY + 2] = true;
-                grid[(cellX + 4) % width +cellY + 1] = true;
+                grid[(cellX + 2) * height + cellY] = true; grid[(cellX + 3) * height + cellY] = true;
+                grid[(cellX)*height + cellY + 1] = true; grid[(cellX + 1)*height + cellY + 1] = true; grid[(cellX + 3)*height + cellY + 1] = true; grid[(cellX + 4)*height + cellY + 1] = true;
+                grid[(cellX)*height + cellY + 2] = true; grid[(cellX + 1)*height + cellY + 2] = true; grid[(cellX + 2)*height + cellY + 2] = true; grid[(cellX + 3)*height + cellY + 2] = true;
+                grid[(cellX + 1)*height + cellY + 3] = true; grid[(cellX + 2)*height + cellY + 3] = true;
             }
             break;
         case 3:
-            if (cellX + 5 < width && cellY + 4 < height) {
-                grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 3] = true;
-                grid[(cellX + 1) % width +cellY + 4] = true;
-                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 4] = true;
-                grid[(cellX + 3) % width +cellY + 4] = true;
-                grid[(cellX + 4) % width +cellY + 1] = true; grid[(cellX + 4) % width +cellY + 4] = true;
-                grid[(cellX + 5) % width +cellY + 2] = true; grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 4] = true;
+            if (cellY + 4 < height && cellX + 5 < width) {
+                grid[(cellX + 2) * height + cellY] = true;
+                grid[(cellX)*height + cellY + 1] = true; grid[(cellX + 4)*height + cellY + 1] = true;
+                grid[(cellX + 5)*height + cellY + 2] = true;
+                grid[(cellX)*height + cellY + 3] = true; grid[(cellX + 5)*height + cellY + 3] = true;
+                grid[(cellX + 1)*height + cellY + 4] = true; grid[(cellX + 2)*height + cellY + 4] = true; grid[(cellX + 3)*height + cellY + 4] = true; grid[(cellX + 4)*height + cellY + 4] = true; grid[(cellX + 5)*height + cellY + 4] = true;
             }
             break;
         case 4:
-            if (cellX + 12 < width && cellY + 10 < height) {
-                grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
-                grid[(cellX + 1) % width +cellY + 4] = true; grid[(cellX + 1) % width +cellY + 5] = true; grid[(cellX + 1) % width +cellY + 6] = true;
-                grid[(cellX + 2) % width +cellY + 8] = true;
-                grid[(cellX + 3) % width +cellY + 6] = true; grid[(cellX + 3) % width +cellY + 8] = true; grid[(cellX + 3) % width +cellY + 9] = true;
-                grid[(cellX + 4) % width +cellY + 9] = true; grid[(cellX + 4) % width +cellY + 10] = true;
-                grid[(cellX + 5) % width +cellY + 4] = true; grid[(cellX + 5) % width +cellY + 5] = true; grid[(cellX + 5) % width +cellY + 6] = true; grid[(cellX + 5) % width +cellY + 8] = true; grid[(cellX + 5) % width +cellY + 9] = true;
-                grid[(cellX + 6) % width +cellY + 8] = true;
-                grid[(cellX + 7) % width +cellY + 6] = true;
-                grid[(cellX + 8) % width +cellY + 2] = true;
-                grid[(cellX + 9) % width +cellY + 1] = true; grid[(cellX + 9) % width +cellY + 5] = true;
-                grid[(cellX + 10) % width +cellY + 2] = true; grid[(cellX + 10) % width +cellY + 3] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true;
-                grid[(cellX + 11) % width +cellY + 5] = true;
-                grid[(cellX + 12) % width +cellY] = true; grid[(cellX + 12) % width +cellY + 1] = true; grid[(cellX + 12) % width +cellY + 3] = true; grid[(cellX + 12) % width +cellY + 4] = true;
+            if (cellY + 10 < height && cellX + 12 < width) {
+                grid[(cellX + 12) * height + cellY] = true;
+                grid[(cellX + 9)*height + cellY + 1] = true; grid[(cellX + 12)*height + cellY + 1] = true;
+                grid[(cellX + 8)*height + cellY + 2] = true; grid[(cellX + 10)*height + cellY + 2] = true;
+                grid[(cellX + 10)*height + cellY + 3] = true; grid[(cellX + 12)*height + cellY + 3] = true;
+                grid[(cellX)*height + cellY + 4] = true; grid[(cellX + 1)*height + cellY + 4] = true; grid[(cellX + 5)*height + cellY + 4] = true; grid[(cellX + 12)*height + cellY + 4] = true;
+                grid[(cellX)*height + cellY + 5] = true; grid[(cellX + 1)*height + cellY + 5] = true; grid[(cellX + 5)*height + cellY + 5] = true; grid[(cellX + 9)*height + cellY + 5] = true; grid[(cellX + 10)*height + cellY + 5] = true; grid[(cellX + 11)*height + cellY + 5] = true;
+                grid[(cellX + 1)*height + cellY + 6] = true; grid[(cellX + 3)*height + cellY + 6] = true; grid[(cellX + 5)*height + cellY + 6] = true; grid[(cellX + 7)*height + cellY + 6] = true; grid[(cellX + 10)*height + cellY + 6] = true;
+                grid[(cellX + 2)*height + cellY + 8] = true; grid[(cellX + 3)*height + cellY + 8] = true; grid[(cellX + 5)*height + cellY + 8] = true; grid[(cellX + 6)*height + cellY + 8] = true;
+                grid[(cellX + 3)*height + cellY + 9] = true; grid[(cellX + 4)*height + cellY + 9] = true; grid[(cellX + 5)*height + cellY + 9] = true;
+                grid[(cellX + 4)*height + cellY + 10] = true;
             }
             break;
         case 5:
-            if (cellX + 18 < width && cellY + 10 < height) {
-                grid[cellX*width + cellY] = true; grid[cellX*width + cellY + 1] = true; grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
-                grid[(cellX + 1) % width +cellY + 5] = true; grid[(cellX + 1) % width +cellY + 6] = true;
-                grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 3] = true; grid[(cellX + 2) % width +cellY + 5] = true;
-                grid[(cellX + 3) % width +cellY + 2] = true; grid[(cellX + 3) % width +cellY + 9] = true;
-                grid[(cellX + 4) % width +cellY + 9] = true;
-                grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 10] = true;
-                grid[(cellX + 6) % width +cellY + 4] = true; grid[(cellX + 6) % width +cellY + 6] = true; grid[(cellX + 6) % width +cellY + 8] = true; grid[(cellX + 6) % width +cellY + 9] = true;
-                grid[(cellX + 7) % width +cellY] = true; grid[(cellX + 7) % width +cellY + 2] = true; grid[(cellX + 7) % width +cellY + 8] = true; grid[(cellX + 7) % width +cellY + 9] = true;
-                grid[(cellX + 8) % width +cellY] = true; grid[(cellX + 8) % width +cellY + 1] = true; grid[(cellX + 8) % width +cellY + 2] = true; grid[(cellX + 8) % width +cellY + 3] = true; grid[(cellX + 8) % width +cellY + 4] = true; grid[(cellX + 8) % width +cellY + 5] = true; grid[(cellX + 8) % width +cellY + 6] = true; grid[(cellX + 8) % width +cellY + 7] = true;
-                grid[(cellX + 10) % width +cellY] = true; grid[(cellX + 10) % width +cellY + 1] = true; grid[(cellX + 10) % width +cellY + 2] = true; grid[(cellX + 10) % width +cellY + 3] = true; grid[(cellX + 10) % width +cellY + 4] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true; grid[(cellX + 10) % width +cellY + 7] = true;
-                grid[(cellX + 11) % width +cellY] = true; grid[(cellX + 11) % width +cellY + 2] = true; grid[(cellX + 11) % width +cellY + 8] = true; grid[(cellX + 11) % width +cellY + 9] = true;
-                grid[(cellX + 12) % width +cellY + 4] = true; grid[(cellX + 12) % width +cellY + 6] = true; grid[(cellX + 12) % width +cellY + 8] = true; grid[(cellX + 12) % width +cellY + 9] = true;
-                grid[(cellX + 13) % width +cellY + 3] = true; grid[(cellX + 13) % width +cellY + 10] = true;
-                grid[(cellX + 14) % width +cellY + 9] = true;
-                grid[(cellX + 15) % width +cellY + 2] = true; grid[(cellX + 15) % width +cellY + 9] = true;
-                grid[(cellX + 16) % width +cellY + 2] = true; grid[(cellX + 16) % width +cellY + 3] = true; grid[(cellX + 16) % width +cellY + 5] = true;
-                grid[(cellX + 17) % width +cellY + 5] = true; grid[(cellX + 17) % width +cellY + 6] = true;
-                grid[(cellX + 18) % width +cellY] = true; grid[(cellX + 18) % width +cellY + 1] = true; grid[(cellX + 18) % width +cellY + 4] = true; grid[(cellX + 18) % width +cellY + 5] = true;
+            if (cellY + 10 < height && cellX + 18 < width) {
+                grid[(cellX) * height + cellY] = true; grid[(cellX + 7)*height + cellY] = true; grid[(cellX + 8)*height + cellY] = true; grid[(cellX + 10)*height + cellY] = true; grid[(cellX + 11)*height + cellY] = true; grid[(cellX + 18)*height + cellY] = true;
+                grid[(cellX)*height + cellY + 1] = true; grid[(cellX + 8)*height + cellY + 1] = true; grid[(cellX + 10)*height + cellY + 1] = true; grid[(cellX + 18)*height + cellY + 1] = true;
+                grid[(cellX + 2)*height + cellY + 2] = true; grid[(cellX + 3)*height + cellY + 2] = true; grid[(cellX + 7)*height + cellY + 2] = true; grid[(cellX + 8)*height + cellY + 2] = true; grid[(cellX + 10)*height + cellY + 2] = true; grid[(cellX + 11)*height + cellY + 2] = true; grid[(cellX + 15)*height + cellY + 2] = true; grid[(cellX + 16)*height + cellY + 2] = true;
+                grid[(cellX + 2)*height + cellY + 3] = true; grid[(cellX + 5)*height + cellY + 3] = true; grid[(cellX + 8)*height + cellY + 3] = true; grid[(cellX + 10)*height + cellY + 3] = true; grid[(cellX + 13)*height + cellY + 3] = true; grid[(cellX + 16)*height + cellY + 3] = true;
+                grid[(cellX + 6)*height + cellY + 4] = true; grid[(cellX + 8)*height + cellY + 4] = true; grid[(cellX + 10)*height + cellY + 4] = true; grid[(cellX)*height + cellY + 4] = true; grid[(cellX + 12)*height + cellY + 4] = true; grid[(cellX + 18)*height + cellY + 4] = true;
+                grid[(cellX)*height + cellY + 5] = true; grid[(cellX + 1)*height + cellY + 5] = true; grid[(cellX + 2)*height + cellY + 5] = true; grid[(cellX + 8)*height + cellY + 5] = true; grid[(cellX + 10)*height + cellY + 5] = true; grid[(cellX + 16)*height + cellY + 5] = true; grid[(cellX + 17)*height + cellY + 5] = true; grid[(cellX + 18)*height + cellY + 5] = true;
+                grid[(cellX + 1)*height + cellY + 6] = true; grid[(cellX + 6)*height + cellY + 6] = true; grid[(cellX + 8)*height + cellY + 6] = true; grid[(cellX + 10)*height + cellY + 6] = true; grid[(cellX + 12)*height + cellY + 6] = true; grid[(cellX + 17)*height + cellY + 6] = true;
+                grid[(cellX + 8)*height + cellY + 7] = true; grid[(cellX + 10)*height + cellY + 7] = true;
+                grid[(cellX + 6)*height + cellY + 8] = true; grid[(cellX + 7)*height + cellY + 8] = true; grid[(cellX + 11)*height + cellY + 8] = true; grid[(cellX + 12)*height + cellY + 8] = true;
+                grid[(cellX + 3)*height + cellY + 9] = true; grid[(cellX + 4)*height + cellY + 9] = true; grid[(cellX + 6)*height + cellY + 9] = true; grid[(cellX + 7)*height + cellY + 9] = true; grid[(cellX + 11)*height + cellY + 9] = true; grid[(cellX + 12)*height + cellY + 9] = true; grid[(cellX + 14)*height + cellY + 9] = true; grid[(cellX + 15)*height + cellY + 9] = true;
+                grid[(cellX + 5)*height + cellY + 10] = true; grid[(cellX + 13)*height + cellY + 10] = true;
             }
             break;
-
+        
         case 6:
-            if (cellX + 35 < width && cellY + 8 < height) {
-                grid[cellX*width + cellY + 3] = true; grid[cellX*width + cellY + 4] = true;
-                grid[(cellX + 1) % width +cellY + 3] = true; grid[(cellX + 1) % width +cellY + 4] = true;
-                grid[(cellX + 5) % width +cellY + 1] = true; grid[(cellX + 5) % width +cellY + 2] = true;
-                grid[(cellX + 10) % width +cellY] = true; grid[(cellX + 10) % width +cellY + 1] = true; grid[(cellX + 10) % width +cellY + 5] = true; grid[(cellX + 10) % width +cellY + 6] = true;
-                grid[(cellX + 11) % width +cellY + 1] = true; grid[(cellX + 11) % width +cellY + 2] = true; grid[(cellX + 11) % width +cellY + 3] = true; grid[(cellX + 11) % width +cellY + 4] = true; grid[(cellX + 11) % width +cellY + 5] = true;
-                grid[(cellX + 12) % width +cellY + 1] = true; grid[(cellX + 12) % width +cellY + 2] = true; grid[(cellX + 12) % width +cellY + 4] = true; grid[(cellX + 12) % width +cellY + 5] = true;
-                grid[(cellX + 13) % width +cellY + 1] = true; grid[(cellX + 13) % width +cellY + 2] = true; grid[(cellX + 13) % width +cellY + 4] = true; grid[(cellX + 13) % width +cellY + 5] = true;
-                grid[(cellX + 14) % width +cellY + 2] = true; grid[(cellX + 14) % width +cellY + 3] = true; grid[(cellX + 14) % width +cellY + 4] = true;
-                grid[(cellX + 19) % width +cellY + 4] = true; grid[(cellX + 19) % width +cellY + 5] = true; grid[(cellX + 19) % width +cellY + 6] = true;
-                grid[(cellX + 20) % width +cellY + 4] = true; grid[(cellX + 20) % width +cellY + 5] = true; grid[(cellX + 20) % width +cellY + 6] = true;
-                grid[(cellX + 21) % width +cellY + 3] = true; grid[(cellX + 21) % width +cellY + 7] = true;
-                grid[(cellX + 22) % width +cellY + 2] = true; grid[(cellX + 22) % width +cellY + 8] = true;
-                grid[(cellX + 23) % width +cellY + 3] = true; grid[(cellX + 23) % width +cellY + 7] = true;
-                grid[(cellX + 24) % width +cellY + 4] = true; grid[(cellX + 24) % width +cellY + 5] = true; grid[(cellX + 24) % width +cellY + 6] = true;
-                grid[(cellX + 34) % width +cellY + 5] = true; grid[(cellX + 34) % width +cellY + 6] = true;
-                grid[(cellX + 35) % width +cellY + 5] = true; grid[(cellX + 35) % width +cellY + 6] = true;
+            if (cellY + 8 < height && cellX + 35 < width) {
+                grid[(cellX + 10) * height + cellY] = true;
+                grid[(cellX + 5) * height + cellY + 1] = true;grid[(cellX + 10) * height + cellY + 1] = true;grid[(cellX + 11) * height + cellY + 1] = true;grid[(cellX + 12) * height + cellY + 1] = true;grid[(cellX + 13) * height + cellY + 1] = true;
+                grid[(cellX + 5) * height + cellY + 2] = true;grid[(cellX + 11) * height + cellY + 2] = true;grid[(cellX + 12) * height + cellY + 2] = true;grid[(cellX + 13) * height + cellY + 2] = true;grid[(cellX + 14) * height + cellY + 2] = true;grid[(cellX + 22) * height + cellY + 2] = true;
+                grid[(cellX)*height + cellY + 3] = true;grid[(cellX + 1) * height + cellY + 3] = true;grid[(cellX + 11) * height + cellY + 3] = true;grid[(cellX + 14) * height + cellY + 3] = true;grid[(cellX + 21) * height + cellY + 3] = true;grid[(cellX + 23) * height + cellY + 3] = true;
+                grid[(cellX)*height + cellY + 4] = true;grid[(cellX + 1) * height + cellY + 4] = true;grid[(cellX + 11) * height + cellY + 4] = true;grid[(cellX + 12) * height + cellY + 4] = true;grid[(cellX + 13) * height + cellY + 4] = true;grid[(cellX + 14) * height + cellY + 4] = true;grid[(cellX + 19) * height + cellY + 4] = true;grid[(cellX + 20) * height + cellY + 4] = true;grid[(cellX + 24) * height + cellY + 4] = true;
+                grid[(cellX + 10) * height + cellY + 5] = true;grid[(cellX + 11) * height + cellY + 5] = true;grid[(cellX + 12) * height + cellY + 5] = true;grid[(cellX + 13) * height + cellY + 5] = true;grid[(cellX + 19) * height + cellY + 5] = true;grid[(cellX + 20) * height + cellY + 5] = true;grid[(cellX + 24) * height + cellY + 5] = true;grid[(cellX + 34) * height + cellY + 5] = true;grid[(cellX + 35) * height + cellY + 5] = true;
+                grid[(cellX + 10) * height + cellY + 6] = true;grid[(cellX + 19) * height + cellY + 6] = true;grid[(cellX + 20) * height + cellY + 6] = true;grid[(cellX + 24) * height + cellY + 6] = true;grid[(cellX + 34) * height + cellY + 6] = true;grid[(cellX + 35) * height + cellY + 6] = true;
+                grid[(cellX + 21) * height + cellY + 7] = true;grid[(cellX + 23) * height + cellY + 7] = true;
+                grid[(cellX + 22) * height + cellY + 8] = true;
             }
             break;
         case 7:
-            if (cellX + 8 < width && cellY + 5 < height) {
-                grid[cellX*width + cellY + 1] = true;
-                grid[(cellX + 1) % width +cellY] = true; grid[(cellX + 1) % width +cellY + 1] = true;
-                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 5] = true;
-                grid[(cellX + 3) % width +cellY + 1] = true; grid[(cellX + 3) % width +cellY + 2] = true; grid[(cellX + 3) % width +cellY + 3] = true; grid[(cellX + 3) % width +cellY + 5] = true;
-                grid[(cellX + 5) % width +cellY + 1] = true; grid[(cellX + 5) % width +cellY + 2] = true; grid[(cellX + 5) % width +cellY + 3] = true; grid[(cellX + 5) % width +cellY + 5] = true;
-                grid[(cellX + 6) % width +cellY] = true; grid[(cellX + 6) % width +cellY + 5] = true;
-                grid[(cellX + 7) % width +cellY] = true; grid[(cellX + 7) % width +cellY + 1] = true;
-                grid[(cellX + 8) % width +cellY + 1] = true;
+            if (cellY + 5 < height && cellX + 8 < width) {
+                grid[(cellX + 1) * height + cellY] = true;grid[(cellX + 2) * height + cellY] = true;grid[(cellX + 6) * height + cellY] = true;grid[(cellX + 7) * height + cellY] = true;
+                grid[(cellX)*height + cellY + 1] = true;grid[(cellX + 1) * height + cellY + 1] = true;grid[(cellX + 3) * height + cellY + 1] = true;grid[(cellX + 5) * height + cellY + 1] = true;grid[(cellX + 7) * height + cellY + 1] = true;grid[(cellX + 8) * height + cellY + 1] = true;
+                grid[(cellX + 3) * height + cellY + 2] = true;grid[(cellX + 5) * height + cellY + 2] = true;
+                grid[(cellX + 3) * height + cellY + 3] = true;grid[(cellX + 5) * height + cellY + 3] = true;
+                grid[(cellX + 2) * height + cellY + 5] = true;grid[(cellX + 3) * height + cellY + 5] = true;grid[(cellX + 5) * height + cellY + 5] = true;grid[(cellX + 6) * height + cellY + 5] = true;
             }
             break;
         case 8:
-            if (cellX + 6 < width && cellY + 6 < height) {
-                grid[cellX*width + cellY + 4] = true; grid[cellX*width + cellY + 5] = true;
-                grid[(cellX + 1) % width +cellY] = true; grid[(cellX + 1) % width +cellY + 1] = true; grid[(cellX + 1) % width +cellY + 5] = true;
-                grid[(cellX + 2) % width +cellY] = true; grid[(cellX + 2) % width +cellY + 2] = true; grid[(cellX + 2) % width +cellY + 4] = true;
-                grid[(cellX + 4) % width +cellY + 2] = true; grid[(cellX + 4) % width +cellY + 4] = true; grid[(cellX + 4) % width +cellY + 6] = true;
-                grid[(cellX + 5) % width +cellY + 4] = true; grid[(cellX + 5) % width +cellY + 6] = true;
-                grid[(cellX + 6) % width +cellY + 6] = true;
+            if (cellY + 6 < height && cellX + 6 < width) {
+                grid[(cellX + 1) * height + cellY] = true;grid[(cellX + 2) * height + cellY] = true;
+                grid[(cellX + 1) * height + cellY + 1] = true;
+                grid[(cellX + 2) * height + cellY + 2] = true;grid[(cellX + 4) * height + cellY + 2] = true;
+                grid[(cellX)*height + cellY + 4] = true;grid[(cellX + 2) * height + cellY + 4] = true;grid[(cellX + 4) * height + cellY + 4] = true;grid[(cellX + 5) * height + cellY + 4] = true;
+                grid[(cellX)*height + cellY + 5] = true;grid[(cellX + 1) * height + cellY + 5] = true;
+                grid[(cellX + 4) * height + cellY + 6] = true;grid[(cellX + 5) * height + cellY + 6] = true;grid[(cellX + 6) * height + cellY + 6] = true;
             }
             break;
         case 9:
-            grid[cellX*width + cellY] = false;
+            grid[cellX*height + cellY] = false;
             break;
         }
     }
@@ -644,7 +623,6 @@ void mouse(int button, int state, int x, int y) {
             drawing = true;
             int cellX = x / CELL_SIZE;
             int cellY = (HEIGHT - y) / CELL_SIZE;
-            printf("%d %d\n", cellX, cellY);
             applyBrush(cellY, cellX);
         }
     }
